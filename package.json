@@ -1,0 +1,26 @@
+{
+  "name": "platform-web-crawler",
+  "version": "0.0.1",
+  "type": "module",
+  "description": "This is an example of a Crawlee project.",
+  "dependencies": {
+    "crawlee": "^3.0.0",
+    "puppeteer": "*"
+  },
+  "devDependencies": {
+    "@apify/tsconfig": "^0.1.0",
+    "tsx": "^4.4.0",
+    "typescript": "~5.5.0",
+    "@types/node": "^20.0.0"
+  },
+  "scripts": {
+    "start:prod:example": "node dist/example/index.js",
+    "start:dev:example": "tsx src/example/index.ts",
+    "start:prod:antaranews": "node dist/antaranews/index.js",
+    "start:dev:antaranews": "tsx src/antaranews/index.ts",
+    "build": "tsc",
+    "test": "echo \"Error: oops, the actor has no tests yet, sad!\" && exit 1"
+  },
+  "author": "It's not you it's me",
+  "license": "ISC"
+}
