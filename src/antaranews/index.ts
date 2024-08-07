@@ -1,5 +1,5 @@
 // For more information, see https://crawlee.dev/
-import { RequestQueue, CheerioCrawler, Configuration, log } from "crawlee";
+import { RequestQueue, CheerioCrawler, log, Configuration } from "crawlee";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -7,19 +7,87 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url); // get the resolved path to the current file
 const __dirname = path.dirname(__filename); // get the name of the current directory
 
+const REQUEST_LENGTH = 100;
 const PLATFORM = "antaranews";
-const MAX_BERITA_ID = 70;
+const MAX_BERITA_ID = 4242883;
+const KATA_KUNCI = [
+  "pinjaman pemerintah",
+  "surat utang",
+  "investor asing",
+  "wakaf",
+  "sbn ritel",
+  "surat berharga syariah negara",
+  "sbsn",
+  "pembiayaan",
+  "sukuk",
+  "hibah",
+  "surat berharga negara",
+  "kreditur pemerintah",
+  "pdn",
+  "ekspor",
+  "aset",
+  "penjamin",
+  "risiko kredit",
+  "ori",
+  "pasar obligasi",
+  "obligasi negara",
+  "inflasi",
+  "suku bunga",
+  "sun",
+  "jatuh tempo",
+  "nilai tukar",
+  "kepemilikan asing",
+  "yield",
+  "ust",
+  "us treasury",
+  "surat utang negara",
+  "obligasi pemerintah",
+  "obligasi ritel indonesia",
+  "sbn",
+  "kebijakan moneter",
+  "likuiditas pasar",
+  "imbal hasil",
+  "pasar global",
+  "rating kredit",
+  "sentimen pasar",
+  "pasar sekunder",
+  "economic growth",
+  "inflation rates",
+  "interest rates",
+  "monetary policy",
+  "geopolitical tensions",
+  "market volatility",
+  "risk appetite",
+  "safe haven demand",
+  "credit ratings",
+  "economic indicators",
+  "global trade",
+  "currency earnings",
+  "currency fluctuations",
+  "commodity prices",
+  "fiscal policy",
+  "debt levels",
+  "liquidity conditions",
+  "global supply chains",
+  "political events",
+  "investors sentiments",
+];
 
+//
 // CONFIGURATION
+//
 const config = Configuration.getGlobalConfig();
 
 // config.set("defaultDatasetId", PLATFORM);
 // config.set("defaultKeyValueStoreId", PLATFORM);
 // config.set("defaultRequestQueueId", PLATFORM);
-config.set("purgeOnStart", true);
+// config.set("purgeOnStart", true);
+config.set("availableMemoryRatio", 0.8);
 // END OF CONFIGURATION
 
+//
 // HELPER FUNCTIONS
+//
 function convertToDateString(dateString: string) {
   // Define a mapping for Indonesian month names to numbers
   const monthMap = new Map([
@@ -63,79 +131,123 @@ function getYyyymmddhhmmss(date: Date) {
     date.getDate()
   )}${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
 }
+//
 // END OF HELPER FUNCTIONS
+//
 
+//
 // REQUEST QUEUE
+//
 const requestQueue = await RequestQueue.open();
 
-await requestQueue.addRequests([
-  { url: "https://www.antaranews.com/berita/1", uniqueKey: "1" },
-  { url: "https://www.antaranews.com/berita/2", uniqueKey: "2" },
-  { url: "https://www.antaranews.com/berita/3", uniqueKey: "3" },
-  { url: "https://www.antaranews.com/berita/4", uniqueKey: "4" },
-  { url: "https://www.antaranews.com/berita/5", uniqueKey: "5" },
-  { url: "https://www.antaranews.com/berita/6", uniqueKey: "6" },
-  { url: "https://www.antaranews.com/berita/7", uniqueKey: "7" },
-  { url: "https://www.antaranews.com/berita/8", uniqueKey: "8" },
-  { url: "https://www.antaranews.com/berita/9", uniqueKey: "9" },
-  { url: "https://www.antaranews.com/berita/10", uniqueKey: "10" },
-]);
+await requestQueue.addRequests(
+  Array.from({ length: REQUEST_LENGTH }, (_, i) => i + 11).map((num) => {
+    return {
+      url: `https://www.antaranews.com/berita/${num}`,
+      uniqueKey: num.toString(),
+    };
+  })
+);
+//
 // END OF REQUEST QUEUE
+//
 
+//
 // CRAWLER
+//
 const crawler = new CheerioCrawler(
   {
     // Comment this option to scrape the full website.
     requestQueue: requestQueue,
     async requestHandler({ $, request, pushData }) {
-      // Extract data from the page
-      const title = $("h1").text().toLowerCase();
-      const article = $(".wrap__article-detail-content")
-        .contents()
-        .filter(function () {
-          return this.nodeType === 3;
-        })
-        .text()
-        .trim()
-        .replace(/(\r\n|\n|\r|\t)/gm, "")
-        .toLowerCase();
-
-      const articleMetadata = $(".text-muted.mt-2.small").text().toLowerCase();
-      let author = "";
-
-      if (articleMetadata.includes("editor")) {
-        author = articleMetadata.split("editor: ")[1].split("\t")[0];
-      }
-
-      const date = convertToDateString(
-        $(".text-secondary.font-weight-normal")
+      // if true, mean the page is correct news. Save the data
+      if (request.loadedUrl.startsWith(request.url)) {
+        // Extract data from the page
+        const title = $("h1").text().toLowerCase();
+        const article = $(".wrap__article-detail-content")
           .contents()
           .filter(function () {
             return this.nodeType === 3;
           })
           .text()
           .trim()
-      );
+          .replace(/(\r\n|\n|\r|\t)/gm, "")
+          .toLowerCase();
+
+        // if article does not contain any of the keywords, skip
+        if (
+          KATA_KUNCI.some((keyword) => {
+            // Escape special regex characters in the search word
+            const escapedKeyword = keyword.replace(
+              /[.*+?^${}()|[\]\\]/g,
+              "\\$&"
+            );
+
+            // Create a regex that matches the word surrounded by word boundaries or punctuation
+            const keywordRegex = new RegExp(
+              `(^|[^a-zA-Z0-9])${escapedKeyword}($|[^a-zA-Z0-9])`,
+              "i"
+            );
+
+            return keywordRegex.test(article) || keywordRegex.test(title);
+          })
+        ) {
+          const articleMetadata = $(".text-muted.mt-2.small")
+            .text()
+            .toLowerCase();
+          let author = "";
+
+          if (articleMetadata.includes("editor")) {
+            author = articleMetadata.split("editor: ")[1].split("\t")[0];
+          }
+
+          const date = convertToDateString(
+            $(".text-secondary.font-weight-normal")
+              .contents()
+              .filter(function () {
+                return this.nodeType === 3;
+              })
+              .text()
+              .trim()
+          );
+
+          // save data
+          await pushData({
+            crawl_datetime: new Date().toISOString(),
+            platform: PLATFORM,
+            url: request.url,
+            title,
+            article,
+            author,
+            date,
+          });
+        }
+      }
 
       const beritaId = parseInt(request.uniqueKey);
-      const nextBeritaId = beritaId + 10;
+      const nextBeritaId = beritaId + REQUEST_LENGTH;
 
       // if max berita id reached, stop
       if (beritaId > MAX_BERITA_ID) {
         return;
       }
 
-      if (title && article) {
-        // save data
-        await pushData({
-          crawl_datetime: new Date().toISOString(),
-          platform: PLATFORM,
-          url: request.url,
-          title,
-          article,
-          author,
-          date,
-        });
+      await requestQueue.addRequests([
+        {
+          url: `https://www.antaranews.com/berita/${nextBeritaId}`,
+          uniqueKey: `${nextBeritaId}`,
+        },
+      ]);
+    },
+    async failedRequestHandler({ request }) {
+      log.error(`Request ${request.url} failed too many times`);
+
+      const beritaId = parseInt(request.uniqueKey);
+      const nextBeritaId = beritaId + REQUEST_LENGTH;
+
+      // if max berita id reached, stop
+      if (beritaId > MAX_BERITA_ID) {
+        return;
       }
 
       await requestQueue.addRequests([
@@ -150,9 +262,13 @@ const crawler = new CheerioCrawler(
 );
 
 await crawler.run();
+//
 // END OF CRAWLER
+//
 
+//
 // WRITE TO CSV
+//
 await crawler.getDataset().then((dataset) => {
   return dataset.exportToCSV(PLATFORM, { toKVS: PLATFORM });
 });
@@ -198,4 +314,6 @@ fs.rename(oldPath, newPath, (err) => {
 
   log.info(`File moved to ${newPath}`);
 });
+//
 // END OF WRITE TO CSV
+//
