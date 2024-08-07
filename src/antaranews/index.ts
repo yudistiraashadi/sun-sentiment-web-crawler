@@ -7,9 +7,10 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url); // get the resolved path to the current file
 const __dirname = path.dirname(__filename); // get the name of the current directory
 
-const REQUEST_LENGTH = 100;
+const REQUEST_LENGTH = 2;
 const PLATFORM = "antaranews";
 const MAX_BERITA_ID = 4242883;
+const START_BERITA_ID = 0; // SET TO 0 TO START FROM THE BEGINNING
 const KATA_KUNCI = [
   "pinjaman pemerintah",
   "surat utang",
@@ -141,12 +142,14 @@ function getYyyymmddhhmmss(date: Date) {
 const requestQueue = await RequestQueue.open();
 
 await requestQueue.addRequests(
-  Array.from({ length: REQUEST_LENGTH }, (_, i) => i + 11).map((num) => {
-    return {
-      url: `https://www.antaranews.com/berita/${num}`,
-      uniqueKey: num.toString(),
-    };
-  })
+  Array.from({ length: REQUEST_LENGTH }, (_, i) => i + START_BERITA_ID).map(
+    (num) => {
+      return {
+        url: `https://www.antaranews.com/berita/${num}`,
+        uniqueKey: num.toString(),
+      };
+    }
+  )
 );
 //
 // END OF REQUEST QUEUE
@@ -157,7 +160,6 @@ await requestQueue.addRequests(
 //
 const crawler = new CheerioCrawler(
   {
-    // Comment this option to scrape the full website.
     requestQueue: requestQueue,
     async requestHandler({ $, request, pushData }) {
       // if true, mean the page is correct news. Save the data
@@ -175,53 +177,53 @@ const crawler = new CheerioCrawler(
           .toLowerCase();
 
         // if article does not contain any of the keywords, skip
-        if (
-          KATA_KUNCI.some((keyword) => {
-            // Escape special regex characters in the search word
-            const escapedKeyword = keyword.replace(
-              /[.*+?^${}()|[\]\\]/g,
-              "\\$&"
-            );
+        // if (
+        //   KATA_KUNCI.some((keyword) => {
+        //     // Escape special regex characters in the search word
+        //     const escapedKeyword = keyword.replace(
+        //       /[.*+?^${}()|[\]\\]/g,
+        //       "\\$&"
+        //     );
 
-            // Create a regex that matches the word surrounded by word boundaries or punctuation
-            const keywordRegex = new RegExp(
-              `(^|[^a-zA-Z0-9])${escapedKeyword}($|[^a-zA-Z0-9])`,
-              "i"
-            );
+        //     // Create a regex that matches the word surrounded by word boundaries or punctuation
+        //     const keywordRegex = new RegExp(
+        //       `(^|[^a-zA-Z0-9])${escapedKeyword}($|[^a-zA-Z0-9])`,
+        //       "i"
+        //     );
 
-            return keywordRegex.test(article) || keywordRegex.test(title);
-          })
-        ) {
-          const articleMetadata = $(".text-muted.mt-2.small")
-            .text()
-            .toLowerCase();
-          let author = "";
+        //     return keywordRegex.test(article) || keywordRegex.test(title);
+        //   })
+        // ) {
+        const articleMetadata = $(".text-muted.mt-2.small")
+          .text()
+          .toLowerCase();
+        let author = "";
 
-          if (articleMetadata.includes("editor")) {
-            author = articleMetadata.split("editor: ")[1].split("\t")[0];
-          }
-
-          const date = convertToDateString(
-            $(".text-secondary.font-weight-normal")
-              .contents()
-              .filter(function () {
-                return this.nodeType === 3;
-              })
-              .text()
-              .trim()
-          );
-
-          // save data
-          await pushData({
-            crawl_datetime: new Date().toISOString(),
-            platform: PLATFORM,
-            url: request.url,
-            title,
-            article,
-            author,
-            date,
-          });
+        if (articleMetadata.includes("editor")) {
+          author = articleMetadata.split("editor: ")[1].split("\t")[0];
         }
+
+        const date = convertToDateString(
+          $(".text-secondary.font-weight-normal")
+            .contents()
+            .filter(function () {
+              return this.nodeType === 3;
+            })
+            .text()
+            .trim()
+        );
+
+        // save data
+        await pushData({
+          crawl_datetime: new Date().toISOString(),
+          platform: PLATFORM,
+          url: request.url,
+          title,
+          article,
+          author,
+          date,
+        });
+        // }
       }
 
       const beritaId = parseInt(request.uniqueKey);
