@@ -1,5 +1,5 @@
 // For more information, see https://crawlee.dev/
-import { RequestQueue, CheerioCrawler, log, Configuration } from "crawlee";
+import { RequestQueue, CheerioCrawler, log } from "crawlee";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -7,10 +7,11 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url); // get the resolved path to the current file
 const __dirname = path.dirname(__filename); // get the name of the current directory
 
-const REQUEST_LENGTH = 2;
+const REQUEST_LENGTH = 10;
 const PLATFORM = "antaranews";
-const MAX_BERITA_ID = 4242883;
-const START_BERITA_ID = 0; // SET TO 0 TO START FROM THE BEGINNING
+// const MAX_BERITA_ID = 4242883;
+const MAX_BERITA_ID = 4136356; // 100000 berita
+const START_BERITA_ID = 4036356; // SET TO 0 TO START FROM THE BEGINNING
 const KATA_KUNCI = [
   "pinjaman pemerintah",
   "surat utang",
@@ -73,18 +74,6 @@ const KATA_KUNCI = [
   "political events",
   "investors sentiments",
 ];
-
-//
-// CONFIGURATION
-//
-const config = Configuration.getGlobalConfig();
-
-// config.set("defaultDatasetId", PLATFORM);
-// config.set("defaultKeyValueStoreId", PLATFORM);
-// config.set("defaultRequestQueueId", PLATFORM);
-// config.set("purgeOnStart", true);
-config.set("availableMemoryRatio", 0.8);
-// END OF CONFIGURATION
 
 //
 // HELPER FUNCTIONS
@@ -158,110 +147,106 @@ await requestQueue.addRequests(
 //
 // CRAWLER
 //
-const crawler = new CheerioCrawler(
-  {
-    requestQueue: requestQueue,
-    async requestHandler({ $, request, pushData }) {
-      // if true, mean the page is correct news. Save the data
-      if (request.loadedUrl.startsWith(request.url)) {
-        // Extract data from the page
-        const title = $("h1").text().toLowerCase();
-        const article = $(".wrap__article-detail-content")
+const crawler = new CheerioCrawler({
+  requestQueue: requestQueue,
+  // proxyConfiguration: proxyConfiguration,
+  async requestHandler({ $, request, pushData }) {
+    // if true, mean the page is correct news. Save the data
+    if (request.loadedUrl.startsWith(request.url)) {
+      // Extract data from the page
+      const title = $("h1").text().toLowerCase();
+      const article = $(".wrap__article-detail-content")
+        .contents()
+        .filter(function () {
+          return this.nodeType === 3;
+        })
+        .text()
+        .trim()
+        .replace(/(\r\n|\n|\r|\t)/gm, "")
+        .toLowerCase();
+
+      // if article does not contain any of the keywords, skip
+      // if (
+      //   KATA_KUNCI.some((keyword) => {
+      //     // Escape special regex characters in the search word
+      //     const escapedKeyword = keyword.replace(
+      //       /[.*+?^${}()|[\]\\]/g,
+      //       "\\$&"
+      //     );
+
+      //     // Create a regex that matches the word surrounded by word boundaries or punctuation
+      //     const keywordRegex = new RegExp(
+      //       `(^|[^a-zA-Z0-9])${escapedKeyword}($|[^a-zA-Z0-9])`,
+      //       "i"
+      //     );
+
+      //     return keywordRegex.test(article) || keywordRegex.test(title);
+      //   })
+      // ) {
+      const articleMetadata = $(".text-muted.mt-2.small").text().toLowerCase();
+      let author = "";
+
+      if (articleMetadata.includes("editor")) {
+        author = articleMetadata.split("editor: ")[1].split("\t")[0];
+      }
+
+      const date = convertToDateString(
+        $(".text-secondary.font-weight-normal")
           .contents()
           .filter(function () {
             return this.nodeType === 3;
           })
           .text()
           .trim()
-          .replace(/(\r\n|\n|\r|\t)/gm, "")
-          .toLowerCase();
+      );
 
-        // if article does not contain any of the keywords, skip
-        // if (
-        //   KATA_KUNCI.some((keyword) => {
-        //     // Escape special regex characters in the search word
-        //     const escapedKeyword = keyword.replace(
-        //       /[.*+?^${}()|[\]\\]/g,
-        //       "\\$&"
-        //     );
+      // save data
+      await pushData({
+        crawl_datetime: new Date().toISOString(),
+        platform: PLATFORM,
+        url: request.url,
+        title,
+        article,
+        author,
+        date,
+      });
+      // }
+    }
 
-        //     // Create a regex that matches the word surrounded by word boundaries or punctuation
-        //     const keywordRegex = new RegExp(
-        //       `(^|[^a-zA-Z0-9])${escapedKeyword}($|[^a-zA-Z0-9])`,
-        //       "i"
-        //     );
+    const beritaId = parseInt(request.uniqueKey);
+    const nextBeritaId = beritaId + REQUEST_LENGTH;
 
-        //     return keywordRegex.test(article) || keywordRegex.test(title);
-        //   })
-        // ) {
-        const articleMetadata = $(".text-muted.mt-2.small")
-          .text()
-          .toLowerCase();
-        let author = "";
+    // if max berita id reached, stop
+    if (beritaId > MAX_BERITA_ID) {
+      return;
+    }
 
-        if (articleMetadata.includes("editor")) {
-          author = articleMetadata.split("editor: ")[1].split("\t")[0];
-        }
-
-        const date = convertToDateString(
-          $(".text-secondary.font-weight-normal")
-            .contents()
-            .filter(function () {
-              return this.nodeType === 3;
-            })
-            .text()
-            .trim()
-        );
-
-        // save data
-        await pushData({
-          crawl_datetime: new Date().toISOString(),
-          platform: PLATFORM,
-          url: request.url,
-          title,
-          article,
-          author,
-          date,
-        });
-        // }
-      }
-
-      const beritaId = parseInt(request.uniqueKey);
-      const nextBeritaId = beritaId + REQUEST_LENGTH;
-
-      // if max berita id reached, stop
-      if (beritaId > MAX_BERITA_ID) {
-        return;
-      }
-
-      await requestQueue.addRequests([
-        {
-          url: `https://www.antaranews.com/berita/${nextBeritaId}`,
-          uniqueKey: `${nextBeritaId}`,
-        },
-      ]);
-    },
-    async failedRequestHandler({ request }) {
-      log.error(`Request ${request.url} failed too many times`);
-
-      const beritaId = parseInt(request.uniqueKey);
-      const nextBeritaId = beritaId + REQUEST_LENGTH;
-
-      // if max berita id reached, stop
-      if (beritaId > MAX_BERITA_ID) {
-        return;
-      }
-
-      await requestQueue.addRequests([
-        {
-          url: `https://www.antaranews.com/berita/${nextBeritaId}`,
-          uniqueKey: `${nextBeritaId}`,
-        },
-      ]);
-    },
+    await requestQueue.addRequests([
+      {
+        url: `https://www.antaranews.com/berita/${nextBeritaId}`,
+        uniqueKey: `${nextBeritaId}`,
+      },
+    ]);
   },
-  config
-);
+  async failedRequestHandler({ request }) {
+    log.error(`Request ${request.url} failed too many times`);
+
+    const beritaId = parseInt(request.uniqueKey);
+    const nextBeritaId = beritaId + REQUEST_LENGTH;
+
+    // if max berita id reached, stop
+    if (beritaId > MAX_BERITA_ID) {
+      return;
+    }
+
+    await requestQueue.addRequests([
+      {
+        url: `https://www.antaranews.com/berita/${nextBeritaId}`,
+        uniqueKey: `${nextBeritaId}`,
+      },
+    ]);
+  },
+});
 
 await crawler.run();
 //
