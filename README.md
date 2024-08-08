@@ -6,3 +6,13 @@ If you're looking for examples or want to learn more visit:
 
 - [Documentation](https://crawlee.dev/api/puppeteer-crawler/class/PuppeteerCrawler)
 - [Examples](https://crawlee.dev/docs/examples/puppeteer-crawler)
+
+# How to run
+
+```
+npm run start:dev:[platform-name]
+```
+
+Available platform:
+
+- `antaranews` => `npm run start:dev:antaranews`
